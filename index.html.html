@@ -1,0 +1,255 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Student Risk Dashboard</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f3f4f6;
+        }
+    </style>
+</head>
+<body class="bg-gray-100 min-h-screen p-4 md:p-8">
+
+    <!-- Main Container -->
+    <div class="max-w-7xl mx-auto bg-white rounded-2xl shadow-xl overflow-hidden p-6 md:p-10">
+
+        <!-- Header -->
+        <div class="flex flex-col md:flex-row justify-between items-center mb-6">
+            <h1 class="text-3xl md:text-4xl font-bold text-gray-800 mb-2 md:mb-0">Student Risk Dashboard</h1>
+            <p class="text-gray-500 text-sm md:text-base">An early warning system to support students.</p>
+        </div>
+
+        <!-- Dashboard Overview -->
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+            <div class="bg-red-500 text-white rounded-xl shadow-lg p-6 flex flex-col items-center justify-center text-center">
+                <i class="fas fa-exclamation-triangle text-4xl mb-3"></i>
+                <h2 class="text-4xl font-extrabold mb-1" id="high-risk-count">0</h2>
+                <p class="text-sm font-medium opacity-80">High-Risk Students</p>
+            </div>
+            <div class="bg-yellow-500 text-white rounded-xl shadow-lg p-6 flex flex-col items-center justify-center text-center">
+                <i class="fas fa-exclamation-circle text-4xl mb-3"></i>
+                <h2 class="text-4xl font-extrabold mb-1" id="medium-risk-count">0</h2>
+                <p class="text-sm font-medium opacity-80">Medium-Risk Students</p>
+            </div>
+            <div class="bg-green-500 text-white rounded-xl shadow-lg p-6 flex flex-col items-center justify-center text-center">
+                <i class="fas fa-check-circle text-4xl mb-3"></i>
+                <h2 class="text-4xl font-extrabold mb-1" id="low-risk-count">0</h2>
+                <p class="text-sm font-medium opacity-80">Low-Risk Students</p>
+            </div>
+        </div>
+
+        <!-- Student List and Controls -->
+        <div class="mb-6">
+            <div class="flex flex-col md:flex-row justify-between items-center mb-4">
+                <h2 class="text-2xl font-bold text-gray-800 mb-2 md:mb-0">Student List</h2>
+                <div class="flex space-x-2">
+                    <input type="text" id="search-input" placeholder="Search students..." class="p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm w-full md:w-auto">
+                    <select id="risk-filter" class="p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm">
+                        <option value="all">All Risk Levels</option>
+                        <option value="high">High Risk</option>
+                        <option value="medium">Medium Risk</option>
+                        <option value="low">Low Risk</option>
+                    </select>
+                </div>
+            </div>
+            <div id="student-list" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+                <!-- Student cards will be dynamically inserted here -->
+            </div>
+        </div>
+
+        <!-- Student Detail Modal (Hidden by default) -->
+        <div id="student-modal" class="fixed inset-0 z-50 bg-gray-900 bg-opacity-75 flex items-center justify-center p-4 hidden">
+            <div class="bg-white rounded-2xl shadow-2xl w-full max-w-2xl p-6 md:p-10 relative">
+                <button id="close-modal-btn" class="absolute top-4 right-4 text-gray-500 hover:text-gray-800 transition-colors duration-200">
+                    <i class="fas fa-times text-2xl"></i>
+                </button>
+                <div id="modal-content">
+                    <h3 class="text-3xl font-bold text-gray-800 mb-4" id="modal-student-name"></h3>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+                        <div class="bg-gray-50 p-4 rounded-xl">
+                            <h4 class="font-semibold text-gray-600 mb-2">Key Metrics</h4>
+                            <ul class="text-gray-700 space-y-2">
+                                <li><strong>Current Attendance:</strong> <span id="modal-attendance"></span>%</li>
+                                <li><strong>Last Test Score:</strong> <span id="modal-score"></span>%</li>
+                                <li><strong>Risk Level:</strong> <span id="modal-risk-level" class="font-bold"></span></li>
+                            </ul>
+                        </div>
+                        <div class="bg-gray-50 p-4 rounded-xl">
+                            <h4 class="font-semibold text-gray-600 mb-2">Recent Test Scores</h4>
+                            <div class="w-full">
+                                <canvas id="score-chart"></canvas>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="bg-blue-50 p-4 rounded-xl">
+                        <h4 class="font-semibold text-blue-800 mb-2">Mentor Actions</h4>
+                        <p class="text-blue-700 text-sm">This system suggests timely, data-driven interventions. The next step is a personal conversation with the student.</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+
+            // Simple In-memory Data Store (simulates a database)
+            let students = JSON.parse(localStorage.getItem('students')) || [
+                { id: 1, name: 'Ava', attendance: 95, scores: [85, 90, 88, 92, 95], attempts: [1, 1, 1, 1, 1], risk: 'low' },
+                { id: 2, name: 'Liam', attendance: 70, scores: [75, 68, 55, 60, 50], attempts: [1, 2, 2, 3, 3], risk: 'high' },
+                { id: 3, name: 'Olivia', attendance: 88, scores: [90, 85, 82, 78, 75], attempts: [1, 1, 1, 2, 2], risk: 'medium' },
+                { id: 4, name: 'Noah', attendance: 92, scores: [95, 96, 94, 98, 97], attempts: [1, 1, 1, 1, 1], risk: 'low' },
+                { id: 5, name: 'Emma', attendance: 78, scores: [80, 72, 65, 70, 68], attempts: [1, 2, 2, 2, 3], risk: 'medium' },
+                { id: 6, name: 'William', attendance: 65, scores: [60, 58, 52, 45, 40], attempts: [2, 3, 3, 4, 4], risk: 'high' },
+                { id: 7, name: 'Sophia', attendance: 99, scores: [100, 99, 100, 98, 99], attempts: [1, 1, 1, 1, 1], risk: 'low' },
+                { id: 8, name: 'James', attendance: 80, scores: [85, 80, 75, 70, 65], attempts: [1, 1, 2, 2, 3], risk: 'medium' }
+            ];
+
+            // Save initial data to localStorage
+            localStorage.setItem('students', JSON.stringify(students));
+
+            const studentListEl = document.getElementById('student-list');
+            const highRiskCountEl = document.getElementById('high-risk-count');
+            const mediumRiskCountEl = document.getElementById('medium-risk-count');
+            const lowRiskCountEl = document.getElementById('low-risk-count');
+            const searchInput = document.getElementById('search-input');
+            const riskFilter = document.getElementById('risk-filter');
+            const studentModal = document.getElementById('student-modal');
+            const closeModalBtn = document.getElementById('close-modal-btn');
+
+            let chartInstance = null;
+
+            // Machine Learning Logic (Simple Rule-based Classifier)
+            function classifyStudent(student) {
+                const latestScore = student.scores[student.scores.length - 1];
+                const scoreTrend = (student.scores[student.scores.length - 1] - student.scores[student.scores.length - 2]);
+                const highAttempts = student.attempts[student.attempts.length - 1] > 2;
+                
+                if (student.attendance < 75 && (latestScore < 60 || scoreTrend < 0 || highAttempts)) {
+                    return 'high';
+                } else if (student.attendance < 85 || latestScore < 75 || highAttempts) {
+                    return 'medium';
+                } else {
+                    return 'low';
+                }
+            }
+
+            // Function to render student cards
+            function renderStudents(filteredStudents) {
+                studentListEl.innerHTML = '';
+                let highRisk = 0;
+                let mediumRisk = 0;
+                let lowRisk = 0;
+
+                filteredStudents.forEach(student => {
+                    const riskLevel = classifyStudent(student);
+                    student.risk = riskLevel; // Update risk level in data
+                    
+                    if (riskLevel === 'high') highRisk++;
+                    else if (riskLevel === 'medium') mediumRisk++;
+                    else lowRisk++;
+
+                    const card = document.createElement('div');
+                    card.classList.add('bg-gray-50', 'rounded-xl', 'shadow-md', 'p-6', 'cursor-pointer', 'hover:shadow-lg', 'transition-shadow', 'duration-300', 'flex', 'flex-col', 'items-start', 'space-y-2');
+                    card.innerHTML = `
+                        <div class="w-full flex justify-between items-center mb-2">
+                            <h3 class="text-xl font-semibold text-gray-800">${student.name}</h3>
+                            <span class="text-xs font-semibold px-2 py-1 rounded-full ${getRiskColor(riskLevel)}">${riskLevel.toUpperCase()}</span>
+                        </div>
+                        <p class="text-gray-600 text-sm">Attendance: <span class="font-medium">${student.attendance}%</span></p>
+                        <p class="text-gray-600 text-sm">Last Score: <span class="font-medium">${student.scores[student.scores.length - 1]}%</span></p>
+                    `;
+                    card.addEventListener('click', () => openStudentModal(student));
+                    studentListEl.appendChild(card);
+                });
+
+                // Update counts in dashboard overview
+                highRiskCountEl.textContent = highRisk;
+                mediumRiskCountEl.textContent = mediumRisk;
+                lowRiskCountEl.textContent = lowRisk;
+            }
+
+            function getRiskColor(risk) {
+                switch (risk) {
+                    case 'high': return 'bg-red-200 text-red-800';
+                    case 'medium': return 'bg-yellow-200 text-yellow-800';
+                    case 'low': return 'bg-green-200 text-green-800';
+                    default: return 'bg-gray-200 text-gray-800';
+                }
+            }
+
+            function openStudentModal(student) {
+                document.getElementById('modal-student-name').textContent = student.name;
+                document.getElementById('modal-attendance').textContent = student.attendance;
+                document.getElementById('modal-score').textContent = student.scores[student.scores.length - 1];
+                const riskLevelEl = document.getElementById('modal-risk-level');
+                riskLevelEl.textContent = student.risk.toUpperCase();
+                riskLevelEl.className = `font-bold ${getRiskColor(student.risk)}`;
+
+                // Render the chart
+                const ctx = document.getElementById('score-chart').getContext('2d');
+                if (chartInstance) {
+                    chartInstance.destroy(); // Destroy previous chart to avoid memory leaks
+                }
+                chartInstance = new Chart(ctx, {
+                    type: 'line',
+                    data: {
+                        labels: student.scores.map((_, i) => `Test ${i + 1}`),
+                        datasets: [{
+                            label: 'Test Scores',
+                            data: student.scores,
+                            borderColor: 'rgb(59, 130, 246)',
+                            backgroundColor: 'rgba(59, 130, 246, 0.2)',
+                            fill: true,
+                            tension: 0.3
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        scales: {
+                            y: {
+                                beginAtZero: true,
+                                max: 100
+                            }
+                        }
+                    }
+                });
+
+                studentModal.classList.remove('hidden');
+            }
+
+            function filterStudents() {
+                const searchTerm = searchInput.value.toLowerCase();
+                const filter = riskFilter.value;
+                const filtered = students.filter(student => {
+                    const matchesSearch = student.name.toLowerCase().includes(searchTerm);
+                    const matchesFilter = filter === 'all' || student.risk === filter;
+                    return matchesSearch && matchesFilter;
+                });
+                renderStudents(filtered);
+            }
+
+            // Event Listeners
+            searchInput.addEventListener('input', filterStudents);
+            riskFilter.addEventListener('change', filterStudents);
+            closeModalBtn.addEventListener('click', () => studentModal.classList.add('hidden'));
+            window.addEventListener('click', (event) => {
+                if (event.target === studentModal) {
+                    studentModal.classList.add('hidden');
+                }
+            });
+
+            // Initial render
+            filterStudents();
+        });
+    </script>
+
+</body>
+</html>
